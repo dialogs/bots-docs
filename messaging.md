@@ -52,7 +52,7 @@ print('Hey, I am here!') # will be printed
 #### ** Java **
 
 ```java
-Bot bot = Bot.start("cbb4994cabfa8d2a5bce0b5f7a44c23da943f767").get();
+Bot bot = Bot.start(token).get();
 
 bot.messaging().onMessage(message -> // subscribing on incoming messages with callback
             ...
@@ -63,15 +63,16 @@ bot.messaging().onMessage(message -> // subscribing on incoming messages with ca
 
 ```javascript
 bot.updateSubject.subscribe({ // subscribing on updates
-  next(update) {
-    console.log('update', update);
-  }
-});
+    next(update) {
+      bot.logger.info(JSON.stringify({ update }, null, 2));
+    },
+  });
 
 bot
-  .onMessage(async (message) => { // providing a callback
+  .subscribeToMessages().pipe(
+    flatMap(async (message) => { // providing a callback
     ...
- })
+})
 ```
 
 <!-- tabs:end -->
@@ -112,13 +113,19 @@ There are high-level functions for updating messages:
 #### ** Python **
 
 ```python
-bot.messaging.update_message(message_id, text)
+bot.messaging.update_message(message, text)
 ```
 
 #### ** Java **
 
 ```java
 bot.messaging().update(messageId, text);
+```
+
+#### ** JavaScript **
+
+```javascript
+bot.editText(messageId, text);
 ```
 
 <!-- tabs:end -->
@@ -132,13 +139,19 @@ There are high-level functions for deleting messages:
 #### ** Python **
 
 ```python
-bot.messaging.delete(mids) # mids - array of message ids
+bot.messaging.delete(message)
 ```
 
 #### ** Java **
 
 ```java
-bot.messaging().sendText(mids); //  mids - array of message ids (List<UUID>)
+bot.messaging().delete(mids); //  mids - array of message ids (List<UUID>)
+```
+
+#### ** JavaScript **
+
+```javascript
+bot.deleteMessage(messageId); //  messageId - message id (<UUID>)
 ```
 
 <!-- tabs:end -->
@@ -159,6 +172,12 @@ bot.messaging.reply(peer, mids, text) # text may by None
 
 ```java
 bot.messaging().reply(peer, messageId, text); # text is not null
+```
+
+#### ** Java **
+
+```java
+bot.sendText(peer, text, MessageAttachment.reply(message_id)) # text is not null
 ```
 
 <!-- tabs:end -->
@@ -193,7 +212,7 @@ bot.messaging().onMessage(message ->
 #### ** JavaScript **
 
 ```javascript
-bot.sendDocument(message.peer, filename)
+bot.sendDocument(peer, filename)
 ```
 
 <!-- tabs:end -->
@@ -228,7 +247,7 @@ bot.messaging().onMessage(message ->
 #### ** JavaScript **
 
 ```javascript
-bot.sendImage(message.peer, path_to_image)
+bot.sendImage(peer, path_to_image)
 ```
 
 <!-- tabs:end -->
@@ -311,25 +330,27 @@ return bot.interactiveApi().send(peer, group);
 
 ```javascript
 bot
-  .onMessage(async (message) => {
-    await bot.sendText(
-        message.peer,
-        message.content.text,
-        MessageAttachment.reply(message.id),
-        ActionGroup.create({
-            actions: [
-                Action.create({
-                    id: 'test',
-                    widget: Button.create({ label: 'button_one' })
-                }),
-                Action.create({
-                    id: 'test',
-                    widget: Button.create({ label: 'button_two' })
-                })
-            ]
-        })
-    );
-  }
+  .subscribeToMessages().pipe(
+    flatMap(async (message) => {
+        await bot.sendText(
+            message.peer,
+            message.content.text,
+            MessageAttachment.reply(message.id),
+            ActionGroup.create({
+                actions: [
+                    Action.create({
+                        id: 'test',
+                        widget: Button.create({ label: 'button_one' })
+                    }),
+                    Action.create({
+                        id: 'test',
+                        widget: Button.create({ label: 'button_two' })
+                    })
+                ]
+            })
+        );
+     }
+   )
 )
 ```
 
@@ -346,7 +367,7 @@ To call confirmation alert before action:
 #### ** Python **
 
 ```python
-confirm = InteractiveMediaConfirm("Are you sure?", "Confirm", "ok", "dismiss")
+confirm = interactive_media.InteractiveMediaConfirm("Are you sure?", "Confirm", "ok", "dismiss")
 
 button = interactive_media.InteractiveMediaButton("Button", "button")
 
@@ -383,22 +404,24 @@ InteractiveGroup group = new InteractiveGroup(actions);
 
 ```javascript
 bot
-  .onMessage(async (message) => {
-    await bot.sendText(
-        message.peer,
-        message.content.text,
-        MessageAttachment.reply(message.id),
-        ActionGroup.create({
-            actions: [
-                Action.create({
-                    id: 'test',
-                    widget: Button.create({ label: 'button_one' }),
-                    confirm: ActionConfirm.create({ title: 'Confirm', text: 'Are you sure?', ok: 'ok', dismiss: 'dismiss' })
-                }),
-            ]
-        })
-    );
-  }
+  .subscribeToMessages().pipe(
+    flatMap(async (message) => {
+        await bot.sendText(
+            message.peer,
+            message.content.text,
+            MessageAttachment.reply(message.id),
+            ActionGroup.create({
+                actions: [
+                    Action.create({
+                        id: 'test',
+                        widget: Button.create({ label: 'button_one' }),
+                        confirm: ActionConfirm.create({ title: 'Confirm', text: 'Are you sure?', ok: 'ok', dismiss: 'dismiss' })
+                    }),
+                ]
+            })
+        );
+    }
+   )
 )
 ```
 <!-- tabs:end -->
@@ -431,7 +454,6 @@ List<InteractiveSelectOption> selectOptions = new ArrayList<>();
 selectOptions.add(new InteractiveSelectOption("Tom & Cross", "Tom & Cross"));
                               selectOptions.add(new InteractiveSelectOption("Pinky gram", "Pinky gram"));
 selectOptions.add(new InteractiveSelectOption("Rody Mo", "Rody Mo"));
-
 ArrayList<InteractiveAction> actions = new ArrayList<>();
 InteractiveSelect interactiveSelect = new InteractiveSelect("Who want's to play?", "Choose one...", selectOptions);
 actions.add(new InteractiveAction("action_1", interactiveSelect));
@@ -549,7 +571,7 @@ This function has several params:
 * **outpeer** - outpeer of user which history of messages we want to load
 * **limit** - number of messages
 * **date** - from which date we load history (in unix timestamp format)
-* **direction** - direction of history (can be ``messaging_pb2.LISTLOADMODE_FORWARD`` or ``messaging_pb2.LISTLOADMODE_BACKWARD``)
+* **direction** - direction of history (can be ``messaging_pb2.LISTLOADMODE_FORWARD`` or ``messaging_pb2.LISTLOADMODE_BACKWARD`` or ``messaging_pb2.LISTLOADMODE_BOTH``)
 
 #### ** Java **
 
@@ -569,5 +591,25 @@ This function has several params:
 * **long date** - from which date we load history (in unix timestamp format)
 * **int limit** - number of messages
 * **Direction direction** - direction of history (can be ``MessagingApi.Direction.FORWARD``, ``MessagingApi.Direction.BACKWARD`` or ``MessagingApi.Direction.BOTH``)
+
+#### ** JavaScript **
+
+
+```javascript
+const messagesHandle = bot
+  .subscribeToMessages().pipe(
+    flatMap(async (message) => {
+            const history = await bot.loadHistory(message.peer, message, 10, HistoryListMode.BACKWARD)
+        }
+    )
+  )
+```
+
+This function has several params:
+
+* **peer: Peer** - peer of user which history of messages we want to load
+* **HistoryListMode: HistoryListMode** - direction of history (can be ``HistoryListMode.FORWARD``, ``HistoryListMode.BACKWARD`` or ``HistoryListMode.BOTH``)
+* **limit: number** - number of messages
+* **message: Message** - from which message we load history
 
 <!-- tabs:end -->
